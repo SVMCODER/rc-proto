@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Site Hoster</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* Base Styles */
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f4f4f9; color: #333; }
+        
+        /* Editor UI */
+        #editor-container { max-width: 800px; margin: 40px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { font-size: 24px; margin-top: 0; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        textarea { height: 400px; font-family: monospace; background: #2d2d2d; color: #f8f8f2; border: none; }
+        button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #0056b3; }
+        #message { margin-top: 15px; font-weight: bold; }
+        
+        /* Viewer UI */
+        #viewer-iframe { width: 100vw; height: 100vh; border: none; display: none; margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="editor-container">
+        <h1>Create & Host a Page</h1>
+        <div class="form-group">
+            <label for="page-id">Custom Page ID (e.g., my-cool-project)</label>
+            <input type="text" id="page-id" placeholder="Enter your desired URL ID...">
+        </div>
+        <div class="form-group">
+            <label for="page-code">Paste your HTML/CSS/JS code here</label>
+            <textarea id="page-code" placeholder="<html>&#10;<body>&#10;  <h1>Hello World!</h1>&#10;</body>&#10;</html>"></textarea>
+        </div>
+        <button onclick="savePage()">Save & Publish</button>
+        <div id="message"></div>
+    </div>
+
+    <iframe id="viewer-iframe"></iframe>
+
+    <script>
+        // === 1. FIREBASE CONFIGURATION ===
+        // ⚠️ REPLACE THIS OBJECT WITH YOUR FIREBASE PROJECT CONFIG ⚠️
+        const firebaseConfig = {
+  apiKey: "AIzaSyAshJV9t1XkvmX1s9nWMXu0VXkJHYKzjLU",
+  authDomain: "sanrajllp.firebaseapp.com",
+  projectId: "sanrajllp",
+  storageBucket: "sanrajllp.firebasestorage.app",
+  messagingSenderId: "493927465948",
+  appId: "1:493927465948:web:2697c06f475f6d7b3d4519",
+  measurementId: "G-3EQ9R30K4S"
+};
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // === 2. ROUTING LOGIC ===
+        // Check if the URL has ?id=something
+        const urlParams = new URLSearchParams(window.location.search);
+        const pageId = urlParams.get('id');
+
+        const editorContainer = document.getElementById('editor-container');
+        const viewerIframe = document.getElementById('viewer-iframe');
+        const messageDiv = document.getElementById('message');
+
+        if (pageId) {
+            // We are in VIEWER mode
+            editorContainer.style.display = 'none';
+            viewerIframe.style.display = 'block';
+            document.body.style.background = '#fff'; // Remove editor background
+            loadPage(pageId);
+        } else {
+            // We are in EDITOR mode
+            editorContainer.style.display = 'block';
+        }
+
+        // === 3. APP FUNCTIONS ===
+
+        // Save new page to database
+        async function savePage() {
+            const idInput = document.getElementById('page-id').value.trim();
+            const codeInput = document.getElementById('page-code').value;
+
+            if (!idInput) {
+                showMessage("Please provide a Custom Page ID.", "red");
+                return;
+            }
+
+            showMessage("Saving to Firebase...", "blue");
+
+            try {
+                // Save to a Firestore collection called "pages"
+                await db.collection("pages").doc(idInput).set({
+                    code: codeInput,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Generate the shareable link
+                const url = window.location.origin + window.location.pathname + "?id=" + idInput;
+                messageDiv.style.color = "green";
+                messageDiv.innerHTML = `✅ Success! Your page is live at: <br><br><a href="${url}" target="_blank">${url}</a>`;
+            } catch (error) {
+                console.error("Error saving:", error);
+                showMessage("Error saving! Check your console and Firebase Security Rules.", "red");
+            }
+        }
+
+        // Load existing page from database
+        async function loadPage(id) {
+            try {
+                const doc = await db.collection("pages").doc(id).get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    // Inject the code into the iframe to render it
+                    viewerIframe.srcdoc = data.code;
+                } else {
+                    viewerIframe.srcdoc = "<h1 style='font-family:sans-serif; text-align:center; margin-top:50px;'>404 - Page Not Found</h1>";
+                }
+            } catch (error) {
+                console.error("Error loading:", error);
+                viewerIframe.srcdoc = "<h1 style='color:red;'>Error loading page.</h1>";
+            }
+        }
+
+        function showMessage(text, color) {
+            messageDiv.style.color = color;
+            messageDiv.textContent = text;
+        }
+    </script>
+</body>
+</html>
